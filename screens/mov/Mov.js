@@ -1,29 +1,32 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Dimensions, ScrollView, Keyboard, TextInput, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
+import { View, StyleSheet, Dimensions, ScrollView, Keyboard, Animated, TextInput, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
 import Icon from 'react-native-vector-icons/FontAwesome'
+import IconF5 from 'react-native-vector-icons/FontAwesome5'
 import Modal from "react-native-modal";
+
+import {modalAlert} from "../../components/util/modal";
 
 import DatePicker from 'react-native-date-picker' 
 import AText from "../../components/util/text";
 import {Table, genCell} from "../../components/util/table";
  
-import {writeFile, readFile, removeFile} from "../../components/util/fileManager";
+import {writeFile, readFile} from "../../components/util/fileManager";
 
+import { RadioButton } from 'react-native-paper';
 //phone dimensions
 const dime = Dimensions.get("screen");
+/**0: Prestado, 1: Pago */
 
-const tData = [ /**0: Prestado, 1: Pago */
-    {   
-        id: "1",
-        client: "1",
-        amount: "90",
-        date: "01/02/2022",
-        movType: "1",
-    },  
-];
-
-
-
+function formatAMPM(date) {
+    let hours = date.getHours();
+    let minutes = date.getMinutes();
+    let ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // the hour '0' should be '12'
+    minutes = minutes < 10 ? '0'+minutes : minutes;
+    let strTime = hours + ':' + minutes + ' ' + ampm;
+    return strTime;
+  }
 const getMax = (arr, prop) => {
     let max;
     for (var i=0 ; i<arr.length ; i++) {
@@ -33,41 +36,40 @@ const getMax = (arr, prop) => {
     return max;
 }
 
-const movType = (type) =>{
-    return type == 0 ? "Préstamo" : "Pago";
-} 
-const pendingAmount = (movements) =>{
-    return movements.reduce(function(sum, val) {
-        
-        if(val.movType == 0)
-            return sum + Number(val.amount);
-        else
-            return sum - Number(val.amount);
-            
-    }, 0);
-};
-const paidAmount = (movements) =>{
-    return movements.reduce(function(sum, val) {
-        
-        if(val.movType == 1)
-            return sum + Number(val.amount)
-        return sum + 0;
-            
-    }, 0);
-};
-
 const Movements = () => {
 
  
-
-    //General vars
-    const [date, setDate] = useState(new Date());
-    const [open, setOpen] = useState(false);
+    const opacity = useState(new Animated.Value(0))[0];
+    let finished = true;
+    function fadeIn(){
+        finished = false;
+        Animated.timing(opacity, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+        }).start(() => {
+            finished = true;
+            fadeOut();
+          });
+         
+    }    
     
-    const [selectedClient, setSelectedClient] = useState({name: "Cliente"});
-    const [isClientSelected, setIsClientSelected] = useState(false);
-    const [modalVisible, setModalVisible] = useState(false);
- 
+    function fadeOut(){
+        Animated.timing(opacity, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+            delay: 1000
+        }).start();
+    }
+
+    function modalAlertHandling(message){
+        if(finished)
+        fadeIn();
+        setModalMessage(message);
+    }
+
+
     
     function openGetClient(){
         setFilterInput(""); 
@@ -76,11 +78,13 @@ const Movements = () => {
     }
 
     function openNewLoan(){
+        setLoanAmount("");
         setIsNewLoan(true);
         setModalVisible(true);
     }
 
     function openNewPayment(){
+        setPayAmount("");
         setIsPayLoan(true);
         setModalVisible(true);
     }
@@ -93,13 +97,102 @@ const Movements = () => {
     }
 
     function filterMovements(){
+
+        let mType = "", fType = false;
+        switch(typeFilter.toLocaleLowerCase()){
+            case "todos": mType = -1; break;
+            case "prestamos": mType = 0; break;
+            case "pagos": mType = 1; break;
+        }
+
+        if(mType != -1) fType = true;
+
         return movements.filter((mov) => {
-                if(Number(mov.client) === selectedClient.id){
-                    return mov;
+
+                //if date filter has been selected
+                if(iniDate !== "- / - / -"){
+                    
+                    const cDate = iniDate.split("/");
+                    const eDate = endDate.split("/");
+                    const mDate = mov.date.split("-")[0].split("/");
+
+                    const cIniDate =  new Date(cDate[1] +"/"+ cDate[0] +"/"+ cDate[2]),
+                          cEndDate =  new Date(eDate[1] +"/"+ eDate[0] +"/"+ eDate[2]),
+                          movDate =  new Date(mDate[1] +"/"+ mDate[0] +"/"+ mDate[2]);
+
+                    
+                    if(Number(mov.client) === selectedClient.id && movDate >= cIniDate && movDate <= cEndDate){
+                        if(fType){
+                            if(mov.movType == mType)
+                                return mov;
+                        }else{
+                            return mov;
+                        }
+                    }
+                }
+                //default filtering
+                else if(Number(mov.client) === selectedClient.id){
+                    if(fType){
+                        if(mov.movType == mType)
+                            return mov;
+                    }else{
+                        return mov;
+                    }
                 }
             })
-    }
+    } 
+    function filterClients(){
 
+        return clients.filter((client) => {
+                //default filtering
+            if(client.status == "1")
+                return client;
+        })
+    } 
+    function movType(type){
+        return type == 0 ? "Préstamo" : "Pago";
+    } 
+    function pendingAmount(movements){
+        return movements.reduce(function(sum, val) {
+            
+
+            if(typeFilter === "todos"){
+
+                if(val.movType == 0)
+                    return sum + Number(val.amount);
+                else
+                    return sum - Number(val.amount);
+
+            }else if(typeFilter === "prestamos"){
+
+                if(val.movType == 0)
+                    return sum + Number(val.amount);
+
+            }else{
+                
+                return "";
+                
+            }
+                
+        }, 0);
+    };
+    function paidAmount(movements){
+        return movements.reduce(function(sum, val) {
+            
+            if(typeFilter === "todos" || typeFilter === "pagos"){
+
+                if(val.movType == 1)
+                    return sum + Number(val.amount)
+                return sum + 0;
+                
+            }else{
+
+                return "";
+
+            }
+        }, 0);
+    };
+    
     function closeModal(){
         setModalVisible(false);
         setIsGetClient(false);
@@ -108,6 +201,24 @@ const Movements = () => {
     }
 
 
+    //Filtering
+    const [typeFilter, setTypeFilter] = useState('todos');
+    const [iniDate, setIniDate] = useState("- / - / -");
+    const [endDate, setEndDate] = useState("- / - / -");
+    const [minDate, setMinDate] = useState(new Date());
+    const [modalDate, setModalDate] = useState(new Date());
+    const [openDate1, setOpen1] = useState(false);
+    const [openDate2, setOpen2] = useState(false);
+    
+
+    //General vars
+    const [selectedClient, setSelectedClient] = useState({name: "Cliente"});
+    const [isClientSelected, setIsClientSelected] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
+ 
+    //modalAlert validation
+    const [modalMessage, setModalMessage] = useState("");
+    const [onModalAlert, setOnModalAlert] = useState("");
  
     //MODAL CLIENTS
     const [isGetClient, setIsGetClient] = useState(false);
@@ -128,7 +239,7 @@ const Movements = () => {
     const [filterInput, setFilterInput] = useState("");
     const cHeaders = ["Nombre", "Fecha de creación"] 
     const [clients, setClients] = useState([]);
-    const mHeaders = ["Cantidad", "Fecha", "TipoMov"]
+    const mHeaders = ["Cantidad", "Fecha", "Tipo"]
     const [movements, setMovements] = useState([]);
     const [maxMovId, setMaxMovId] = useState();
     //runs only once
@@ -162,6 +273,7 @@ const Movements = () => {
             // make sure to catch any error
             .catch(console.error);;
 
+            console.log("Called")
 
 
         }, [runEffect]);
@@ -179,7 +291,7 @@ const Movements = () => {
             <ScrollView nestedScrollEnabled = {true} contentContainerStyle={styles.body}> 
                 {/*Client selector*/}
                 <View style={styles.formContainer}>
-
+                <AText textContent={"Cliente MAYBE ADD AN ICON TO CLEAR SELECTED CLIENT"}/> 
                     <TouchableOpacity onPress={() => {openGetClient()}}>
                         <TextInput
                             style={[styles.input, isClientSelected ? styles.selectedInput : null]}
@@ -194,48 +306,159 @@ const Movements = () => {
 
                 </View>
                 
-                {/*Date selector for filtering*/} IM HERE, FILTER BY DATE OR SOME RADIO BUTTONS TO FILTER EITHER BY PRESTAMO OR PAGOS AND SEE THEM, THIS WILL AFFECT THE TOTAL RESULT AT THE BOTTOM
-                <View style={[styles.formContainer, styles.colForm, !isClientSelected ? {opacity: 0.2} : null]} pointerEvents={isClientSelected ? "auto" : "none"}> 
+                {/*Date selector for filtering*/} 
 
-                    <TouchableOpacity style={styles.col} onPress={() => setOpen(true)}>
-                        <TextInput
-                            style={styles.input}
-                            editable={false} 
-                            selectTextOnFocus={false}
-                        >
-                            <Icon style={styles.innerIcon} name={'search'} size={20} color={"black"}/> 
-                            <AText textContent={"   Fecha inicial"} color={"black"}/>
-                        </TextInput> 
-                    </TouchableOpacity>
+                 <View style={styles.formContainer} > 
 
+                    <View style={[styles.rowForm, {padding: 5} ]}>
 
-                    <TouchableOpacity style={styles.col}  onPress={() => setOpen(true)}>
-                        <TextInput
-                            style={styles.input}
-                            editable={false} 
-                            selectTextOnFocus={false}
-                        >
-                            <Icon style={styles.innerIcon} name={'search'} size={20} color={"black"}/> 
-                            <AText textContent={"   Fecha final"} color={"black"}/>
-                        </TextInput> 
-                    </TouchableOpacity>
+                        <AText textContent={"Filtros"} size={16} weight={"bold"}/>
+                        <TouchableOpacity  onPress={() => {
+                    
+                            //Default filters
+                            setIniDate("- / - / -");
+                            setEndDate("- / - / -");
+                            setTypeFilter("todos");
+                            modalAlertHandling("Filtros restablecidos")
+                            }
+                        }>
+                            <IconF5 style={{marginLeft: 10}} name={'remove-format'} size={20} color={"white"}/> 
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.rowForm}>
+                        <View style={{flexDirection:"column"}}>
+                            <AText textContent={"Fecha inicial"}/> 
+                            <TouchableOpacity style={[styles.col, !isClientSelected || filterMovements().length < 1 && iniDate === "- / - / -" ? {opacity: 0.2} : null]}
+                                disabled={!isClientSelected || filterMovements().length < 1 && iniDate === "- / - / -"}
+                                onPress={() => {
+                
+
+                                    if(iniDate !== "- / - / -"){
+                                        const mDate = iniDate.split("/");
+                                        setModalDate(new Date(mDate[1] +"/"+ mDate[0] +"/"+ mDate[2]));
+                                    }
+
+                                    setOpen1(true);
+                                
+                                }}>
+                                <TextInput
+                                    style={styles.input}
+                                    editable={false} 
+                                    selectTextOnFocus={false}
+                                    value={iniDate}
+                                    color={"black"}
+                                />
+                                <Icon style={styles.innerIcon} name={'search'} size={20} color={"black"}/> 
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{flexDirection:"column"}}>
+                            <AText textContent={"Fecha final"}/> 
+                            <TouchableOpacity style={[styles.col, iniDate === "- / - / -" ? {opacity: 0.2} : null]}
+                                disabled={iniDate === "- / - / -"}
+                                onPress={() => {
+                                        
+
+                                        if(endDate !== "- / - / -"){
+                                            const mDate = endDate.split("/");
+                                            setModalDate(new Date(mDate[1] +"/"+ mDate[0] +"/"+ mDate[2]));
+                                        }
+
+                                        setOpen2(true);
+                                    
+                                }}>
+                                <TextInput
+                                    style={styles.input}
+                                    editable={false} 
+                                    selectTextOnFocus={false}
+                                    value={endDate}
+                                    color={"black"}
+                                />
+                                    <Icon style={styles.innerIcon} name={'search'} size={20} color={"black"}/> 
+                            </TouchableOpacity>
+                        </View> 
+                    </View>
+                    <View style={{flexDirection:"column"}}>
+                        <AText textContent={"Tipo"}/> 
+                                
+                        <View style={[styles.rowForm, !isClientSelected || filterMovements() < 1 && typeFilter === "todos" ? {opacity: 0.2} : null]}
+                         pointerEvents={!isClientSelected || filterMovements() < 1 && typeFilter === "todos" ? "none" : "auto"} >
+                            <View>
+                                <RadioButton.Item
+                                    value="todos"
+                                    label="Todos"
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    status={ typeFilter === 'todos' ? 'checked' : 'unchecked' }
+                                    onPress={() => setTypeFilter('todos')}
+                                />
+                            </View>
+                            <View >
+                                <RadioButton.Item
+                                    value="prestamos"
+                                    label="Préstamos"
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    status={ typeFilter === 'prestamos' ? 'checked' : 'unchecked' }
+                                    onPress={() => setTypeFilter('prestamos')}
+                                />
+                            </View>
+                            <View >
+                                <RadioButton.Item
+                                    value="pagos"
+                                    label="Pagos"
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    status={ typeFilter === 'pagos' ? 'checked' : 'unchecked' }
+                                    onPress={() => setTypeFilter('pagos')}
+                                />
+                            </View>
+                        </View>
+                    </View>
 
                     <DatePicker
-                    modal
-                    title={null}
-                    open={open}
-                    date={date}
-                    mode={"date"}
-                    locale={"es"}
-                    onConfirm={(date) => {
-                        setOpen(false)
-                        setDate(date)
-                    }}
-                    onCancel={() => {
-                        setOpen(false)
-                    }}
-                    />
+                        modal
+                        title={null}
+                        open={openDate1}
+                        date={modalDate}
+                        mode={"date"}
+                        locale={"es"}
+                        onConfirm={(date) => {
+                            setOpen1(false)
+                            setIniDate(date.getDate()+"/"+(date.getMonth()+1)+"/"+date.getFullYear());
+                            setMinDate(date);
 
+                            if(endDate === "- / - / -" || new Date(endDate.split("/")[1] +"/"+ endDate.split("/")[0] +"/"+ endDate.split("/")[2]) < date)
+                                setEndDate(date.getDate()+"/"+(date.getMonth()+1)+"/"+date.getFullYear());
+
+                            //Run filter movements
+                        }}
+                        onCancel={() => {
+                            setOpen1(false)
+                        }}
+                    />
+                    <DatePicker
+                        modal
+                        title={null}
+                        open={openDate2}
+                        minimumDate={minDate}
+                        date={modalDate}
+                        mode={"date"}
+                        locale={"es"}
+                        onConfirm={(date) => {
+                            setOpen2(false)
+                            setEndDate(date.getDate()+"/"+(date.getMonth()+1)+"/"+date.getFullYear());
+
+                            //Run filter movements
+
+                        }}
+                        onCancel={() => {
+                            setOpen2(false)
+                        }}
+                    />
                 </View>
 
                 {/* Movements table */}
@@ -243,9 +466,52 @@ const Movements = () => {
                     
                 {Table(mHeaders, 
                             () => {
+                                if(!isClientSelected) {
+                                    return <View>
+                                                
+                                            <TouchableOpacity 
+                                                style={[{
+                                                        flexDirection: "row",
+                                                        alignSelf: 'stretch', 
+                                                        borderBottomWidth: 1,
+                                                        borderColor: "thistle",
+                                                    }]} 
+                                               
+                                            >
+                                                {genCell("Selecciona", mHeaders.length, "#3056d3")}
+                                                {genCell("un", mHeaders.length, "#3056d3")} 
+                                                {genCell("cliente", mHeaders.length, "#3056d3")}
 
-                                if(filterMovements().length < 1 || !isClientSelected) return;  
-                                 
+
+                    
+                                            </TouchableOpacity>
+                    
+                                        </View>  
+                                }
+
+                                if(filterMovements().length < 1 ){
+                                            return <View>
+                                                
+                                            <TouchableOpacity 
+                                                style={[{
+                                                        flexDirection: "row",
+                                                        alignSelf: 'stretch', 
+                                                        borderBottomWidth: 1,
+                                                        borderColor: "thistle",
+                                                    }]} 
+                                               
+                                            >
+                                                {genCell("No", mHeaders.length, "#3056d3")}
+                                                {genCell("hay", mHeaders.length, "#3056d3")} 
+                                                {genCell("movimientos", mHeaders.length, "#3056d3")}
+
+
+                    
+                                            </TouchableOpacity>
+                    
+                                        </View>  
+                                }
+                                  
                                 return filterMovements().map(data=>{
 
                                     return <View key={data.id}>
@@ -282,9 +548,17 @@ const Movements = () => {
                         )}
 
 
-                   <AText textContent={"Total adeudado: " + pendingAmount(filterMovements()) }   color={"#d9534fce"} weight={"bold"} size={16}/>
-                   <AText textContent={"Total pagado: " + paidAmount(filterMovements()) } weight={"bold"} color={"#5cb85cce"} size={16}/>
-                   <AText textContent={"Total de transacciones: " + (paidAmount(filterMovements()) + pendingAmount(filterMovements()))} color={"#f0ad4eae"} weight={"bold"} size={16}/>
+                        <AText textContent={typeFilter !== "todos" ? "Total adeudado: - No calculado -" : "Total adeudado: "+ pendingAmount(filterMovements()) }  
+                        color={"#d9534fce"} weight={"bold"} size={16}
+                        />
+
+                        <AText textContent={typeFilter !== "todos" ? "Total pagado: - No calculado -" : "Total pagado: "+ paidAmount(filterMovements()) }  
+                        weight={"bold"} color={"#5cb85cce"} size={16}
+                        />
+                        
+                        <AText textContent={"Total en transacciones: " + (paidAmount(filterMovements()) + pendingAmount(filterMovements()))} 
+                        color={"#f0ad4eae"} weight={"bold"} size={16}
+                        />
 
                 </View>
 
@@ -292,18 +566,18 @@ const Movements = () => {
 
 
                 {/*Main buttons */}
-                <View style={[styles.formContainer, styles.colForm]} > 
+                <View style={[styles.formContainer, styles.rowForm]} > 
 
-                    <TouchableOpacity style={[ styles.formButton, isClientSelected ? null: {opacity: 0.2}]} 
-                                               disabled={!isClientSelected}
+                    <TouchableOpacity style={[ styles.formButton, isClientSelected  && typeFilter === "todos"? null: {opacity: 0.2}]} 
+                                               disabled={!isClientSelected || typeFilter !== "todos"}
                                                onPress={() => {openNewLoan()}}> 
                         <AText textContent={"Nuevo"} />    
                     </TouchableOpacity>
 
 
 
-                    <TouchableOpacity style={[ styles.formButton,  pendingAmount(filterMovements()) > 0 && isClientSelected? null : {opacity: 0.2}]} 
-                                               disabled={!isClientSelected || pendingAmount(filterMovements()) < 1}
+                    <TouchableOpacity style={[ styles.formButton,  pendingAmount(filterMovements()) > 0 && isClientSelected  && typeFilter === "todos" ? null : {opacity: 0.2}]} 
+                                               disabled={!isClientSelected || pendingAmount(filterMovements()) < 1 || typeFilter !== "todos"}
                                             
                                             onPress={() => {openNewPayment()}}> 
                         <AText textContent={"Pago"} />    
@@ -312,10 +586,6 @@ const Movements = () => {
                 </View>
 
             </ScrollView> 
-
-         
-         
-         
          
          
             <Modal
@@ -324,6 +594,8 @@ const Movements = () => {
                 onRequestClose={() => {
                     closeModal();
                 }}
+                animationIn={"fadeIn"}
+                animationOut={"fadeOut"}
             >
 
                 <View style={{backgroundColor: "#1e1e1e", borderRadius: 10, }}>
@@ -360,40 +632,87 @@ const Movements = () => {
                                 {Table(cHeaders, 
                                     () => {
 
-                                        if(clients.length < 1) return;  
-
-                                        return clients.map(data=>{
-
-                                        if(data.name.toString().toLowerCase().indexOf(filterInput.toLowerCase()) > -1){
-                                            return <View key={data.id}>
+                                        let returned = false;
+                                        if(filterClients().length < 1){
+                                            return <View >
                                                 
                                                         <TouchableOpacity 
-                                                            style={[{
+                                                            style={{
                                                                     flexDirection: "row",
                                                                     alignSelf: 'stretch', 
                                                                     borderBottomWidth: 1,
                                                                     borderColor: "thistle",
-                                                                }]} 
+                                                                }} 
+                                                        >
+                                
+                                                            {genCell("No", cHeaders.length, "#3056d3")}
+                                                            {genCell("hay resultados", cHeaders.length, "#3056d3")}
                                                             
-                                                            onPress={() => {
+                                                        </TouchableOpacity>
+                                
+                                                    </View>  
+                                            }
+             
+                                         const fc = filterClients().map(data=>{
+            
+                                            if(data.name.toString().toLowerCase().indexOf(filterInput.toLowerCase()) > -1){
+                                                returned = true;
+                                                return <View key={data.id}>
+                                                
+                                                        <TouchableOpacity 
+                                                            style={{
+                                                                    flexDirection: "row",
+                                                                    alignSelf: 'stretch', 
+                                                                    borderBottomWidth: 1,
+                                                                    borderColor: "thistle",
+                                                                }}
+                                                            
+                                                                onPress={() => {
                                 
                                                                     //Modify existing
-                                                                    getClient({id: data.id, name: data.name, createdAt: data.createdAt})
-                                
+                                                                    getClient({id: data.id, name: data.name, createdAt: data.createdAt});
+                                                                    //Default filters
+                                                                    setIniDate("- / - / -");
+                                                                    setEndDate("- / - / -");
+                                                                    setTypeFilter("todos");
+                                 
                                                                 }
                                                             }
                                                         >
                                 
                                                             {genCell(data.name, cHeaders.length)}
                                                             {genCell(data.createdAt, cHeaders.length)}
-                                
+                                                            
                                                         </TouchableOpacity>
                                 
                                                     </View>  
-                                            }
-
-                                    });
-
+                                            } 
+                                                
+                                               
+                                        });
+             
+                                        if(!returned){
+                                            return <View >
+                                                
+                                                        <TouchableOpacity 
+                                                            style={{
+                                                                    flexDirection: "row",
+                                                                    alignSelf: 'stretch', 
+                                                                    borderBottomWidth: 1,
+                                                                    borderColor: "thistle",
+                                                                }} 
+                                                        >
+                                
+                                                            {genCell("No", cHeaders.length, "#3056d3")}
+                                                            {genCell("hay resultados", cHeaders.length, "#3056d3")} 
+                                                            
+                                                        </TouchableOpacity>
+                                
+                                                    </View>  
+                                        }else{
+                                            return fc;
+                                        }
+                                       
                                     } 
                                 )}
 
@@ -402,10 +721,6 @@ const Movements = () => {
 
                         )
                     }
-
-
-
-
 
 
                     {/*New loan */}
@@ -432,7 +747,17 @@ const Movements = () => {
                                         <AText textContent={"Total pagado: " + paidAmount(filterMovements()) } color={"#5cb85cce"} weight={"bold"}/>
                                     </View>
                                 
-                                    <AText textContent={"Cantidad de cargo"}/> 
+                                    <View style={{flexDirection: "row", justifyContent: "space-between"}}>
+
+                                        <AText textContent={"Cantidad de cargo "  }/> 
+
+                                        
+                                        <View style={[ onModalAlert === "" ? styles.hidden : null, {flexDirection: "row"}]}>
+                                            <AText textContent={onModalAlert} color={"#d9534fce"} weight={"bold"}/> 
+                                            <Icon name={"exclamation"} size={18} color={"#d9534fce"}/>
+                                        </View>
+                                    </View>
+
                                         <TextInput
                                             style={styles.input}
                                             placeholder="$00000000"
@@ -450,14 +775,16 @@ const Movements = () => {
 
                                             if(Number(loanAmount)){
 
+                                                  
+
                                                 const newDate = new Date();
-                                                    
+                                                   
                                                 //Gen new client object
                                                 const newMov = {   
                                                     id: maxMovId+1 || 1,
                                                     client: selectedClient.id,
                                                     amount: loanAmount,
-                                                    date: newDate.getDate()+ "/" +newDate.getMonth()+ "/" +newDate.getFullYear(),
+                                                    date: newDate.getDate()+ "/" +(newDate.getMonth()+1)+ "/" +newDate.getFullYear() + " - " +formatAMPM(new Date),
                                                     movType: "0",
                                                 };
 
@@ -468,12 +795,19 @@ const Movements = () => {
                                                 setLoanAmount("");
 
                                                 Keyboard.dismiss();
-                                                setRunEffect(!runEffect);
                                                 closeModal();
+                                                setTimeout(() => {
+                                                    setRunEffect(!runEffect);
+                                                }, 500);
+
+                                                modalAlertHandling("Transacción completa")
 
                                             }
                                             else{
-                                                console.log("VALOL")
+                                                setOnModalAlert("Valor inválido ");
+                                                setTimeout(() => {
+                                                    setOnModalAlert("");
+                                                }, 2000);
                                             }
 
                                     }}> 
@@ -512,7 +846,16 @@ const Movements = () => {
                                         <AText textContent={"Total pagado: " + paidAmount(filterMovements()) } color={"#5cb85cce"} weight={"bold"}/>
                                     </View>
 
-                                    <AText textContent={"Cantidad a pagar"}/> 
+                                    <View style={{flexDirection: "row", justifyContent: "space-between"}}>
+
+                                        <AText textContent={"Cantidad a pagar"  }/> 
+
+                                        <View style={[ onModalAlert === "" ? styles.hidden : null, {flexDirection: "row"}]}>
+                                            <AText textContent={onModalAlert} color={"#d9534fce"} weight={"bold"}/> 
+                                            <Icon name={"exclamation"} size={18} color={"#d9534fce"}/>
+                                        </View>
+                                    </View>
+
                                         <TextInput
                                             style={styles.input}
                                             placeholder="$00000000"
@@ -527,10 +870,17 @@ const Movements = () => {
 
                                     <TouchableOpacity style={[ styles.formButton]} onPress={() => {
 
+ 
 
                                             if(Number(payAmount)){
+                                                let currentPayAmount = payAmount;
                                                 if(Number(payAmount) > pendingAmount(filterMovements())){
-                                                    console.log("Jaier")
+                                                    
+                                                    setPayAmount(pendingAmount(filterMovements()).toString())
+                                                    setOnModalAlert("Cantidad a pagar ajustada");
+                                                    setTimeout(() => {
+                                                        setOnModalAlert("");
+                                                    }, 2000);
                                                     return;
                                                 }
                                                 
@@ -541,7 +891,7 @@ const Movements = () => {
                                                     id: maxMovId+1 || 1,
                                                     client: selectedClient.id,
                                                     amount: payAmount,
-                                                    date: newDate.getDate()+ "/" +newDate.getMonth()+ "/" +newDate.getFullYear(),
+                                                    date: newDate.getDate()+ "/" +(newDate.getMonth()+1)+ "/" +newDate.getFullYear() + " - " +formatAMPM(new Date),
                                                     movType: "1",
                                                 };
 
@@ -552,12 +902,18 @@ const Movements = () => {
                                                 setPayAmount("");
 
                                                 Keyboard.dismiss();
-                                                setRunEffect(!runEffect);
                                                 closeModal();
+                                                setTimeout(() => {
+                                                    setRunEffect(!runEffect);
+                                                }, 500);
+                                                modalAlertHandling("Transacción completa")
 
                                             }
-                                            else{
-                                                console.log("VALOL")
+                                            else{ 
+                                                setOnModalAlert("Valor inválido ");
+                                                setTimeout(() => {
+                                                    setOnModalAlert("");
+                                                }, 2000);
                                             }
 
                                         
@@ -576,6 +932,9 @@ const Movements = () => {
 
             </Modal>
 
+            <Animated.View style={{opacity}}>
+                {modalAlert(modalMessage)}
+            </Animated.View>
         </React.Fragment>
 
     );
@@ -606,13 +965,13 @@ const styles = StyleSheet.create({
         backgroundColor: "#3056d3",
         margin: 5,
     },
-    colForm: {
+    rowForm: {
         flexDirection: "row",
         alignItems: 'center',
         justifyContent: 'center',
     },
     col: {
-        width: "50%" ,
+        width: dime.width/2.1 ,
     }, 
 
     formButton: {

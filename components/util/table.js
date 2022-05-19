@@ -6,8 +6,8 @@ import AText from "./text";
 
 const dime = Dimensions.get("screen");
 
-const genCell = (data, colAmount, style = "") =>{
-    return  <View  style={[styles.cell, {width: 100 / colAmount + "%", backgroundColor: style}]}>
+const genCell = (data, colAmount, bgColor = "") =>{
+    return  <View  style={[styles.cell, {width: 100 / colAmount + "%", backgroundColor: bgColor}]}>
                 <AText textContent={data}/>
             </View>
 }

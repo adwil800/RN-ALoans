@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { TextInput, View, StyleSheet, Dimensions, Animated, ScrollView, TouchableOpacity, Alert } from "react-native";
-import Icon from 'react-native-vector-icons/FontAwesome';
-//Pure component call without brackets
 
 import AText from "../../components/util/text";
-import {writeFile, readFile, removeFile} from "../../components/util/fileManager";
+import {writeFile, readFile} from "../../components/util/fileManager";
 
 import {Table, genCell} from "../../components/util/table";
 import {modalAlert} from "../../components/util/modal";
  
+import { RadioButton } from 'react-native-paper';
 
-const tHeaders = ["Nombre", "Fecha de creación"] 
+const tHeaders = ["Nombre", "Fecha de creación", "Estado"] 
  
 function getMax(arr, prop) {
     let max;
@@ -20,23 +19,21 @@ function getMax(arr, prop) {
     }
     return max;
 }
-
-//phone dimensions
-const dime = Dimensions.get("screen");
+ 
 
 const Registration = () => {
 
-    const delConfirmation = (clientName, cancelCallback, deleteCallback) =>
+    const delConfirmation = (clientName, status, cancelCallback, deleteCallback) =>
         Alert.alert(
             "Atención!",
-            "El cliente "+clientName+" será eliminado.",
+            "El cliente "+clientName+" será " + status+ ".",
             [
                 {
                 text: "Cancelar",
                 onPress: () => cancelCallback(),
                 style: "cancel"
                 },
-                { text: "Eliminar", onPress: () => deleteCallback()}
+                { text: "Confirmar", onPress: () => deleteCallback()}
             ]
         );
 
@@ -65,10 +62,72 @@ const Registration = () => {
         }).start();
     }
 
+    function filterClients(){
 
+        let sType = "", fType = false;
+        switch(typeFilter.toLocaleLowerCase()){
+            case "todos": sType = -1; break;
+            case "activos": sType = 1; break;
+            case "inactivos": sType = 0; break;
+        }
 
+        if(sType != -1) fType = true;
+
+        return clients.filter((client) => {
+                //default filtering
+                if(fType){
+                    if(client.status == sType)
+                        return client;
+                }else{
+                    return client;
+                }
+            })
+    } 
+    
+    function filterMovements(){
+        return movements.filter((mov) => {
+                //default filtering
+                 if(Number(mov.client) === updateId){
+                        return mov;
+                }
+
+        })
+    } 
+    function pendingAmount(movements){
+        return movements.reduce(function(sum, val) {
+        
+            if(val.movType == 0)
+                return sum + Number(val.amount);
+            else
+                return sum - Number(val.amount);
+                
+        }, 0);
+    };
+    function cStatus(status){
+        switch(status.toString()){
+            case "0": return "Inactivo";
+            case "1": return "Activo";
+        }
+    }
+
+    function modalAlertHandling(message){
+
+        if(finished)
+        fadeIn();
+        setModalMessage(message);
+
+    }
+
+    function clearClientSelection(){
+        setFilterInput("");
+        setNewClient("");
+        setUpdateId("");
+        setCreate(true);
+        setRunEffect(!runEffect);
+    }
     
 
+    const [typeFilter, setTypeFilter] = useState('todos');
     //update
     const [updateId, setUpdateId] = useState("");
     const [filterInput, setFilterInput] = useState("");
@@ -84,31 +143,35 @@ const Registration = () => {
     const [newClient, setNewClient] = useState();
     const [maxClientId, setClientId] = useState();
     
+    const [movements, setMovements] = useState([]);
 
-    function modalAlertHandling(message){
-
-        if(finished)
-        fadeIn();
-        setModalMessage(message);
-
-
- 
-    }
 
     //runs only once
     useEffect( () => {
-        
         const fetchData = async () => {
             const data = await readFile("clients");
-            let jsonRes = "";
-            if(data)
-                jsonRes = JSON.parse(data);
             
-            if( jsonRes.length > 0){
-                setClientId(getMax(jsonRes, "id").id);
-                setClients(jsonRes);
+            let jsonResCli = "";
+            if(data)
+                jsonResCli = JSON.parse(data);
+
+            if(jsonResCli.length > 0){
+                setClientId(getMax(jsonResCli, "id").id);
+                setClients(jsonResCli);
             }
+
+            //Movements data
+            const dataM = await readFile("movements");
+            let jsonResMov = "";
+            if(dataM)
+                jsonResMov = JSON.parse(dataM);
+            
+            if(jsonResMov.length > 0){
+                setMovements(jsonResMov);
+            }
+
         }
+            
 
         fetchData()
         // make sure to catch any error
@@ -149,13 +212,13 @@ const Registration = () => {
                                 const nClient = {
                                         id: maxClientId+1 || 1,
                                         name: newClient,
-                                        createdAt: newDate.getDate()+ "/" +newDate.getMonth()+ "/" +newDate.getFullYear()
+                                        createdAt: newDate.getDate()+ "/" +newDate.getMonth()+ "/" +newDate.getFullYear(),
+                                        status: "1"
                                 };
 
                                 //Merge with allClients
                                 clients.push(nClient);
                                 writeFile("clients", clients)
-
                                 setNewClient("");
                                 setFilterInput("");
                                 setRunEffect(!runEffect);
@@ -217,23 +280,39 @@ const Registration = () => {
                             onPress={() =>{
                                 //updateClient
                                 if(updateId){
-                                    let cliName = "";
+                                    let cliName = "", cliStatus = "", statusString = "";
 
                                     for (let i = 0; i < clients.length; i++) {
 
                                         if(Number(clients[i].id) === Number(updateId)){
                                             cliName = clients[i].name;
+                                            
+                                            if(clients[i].status == "1"){
+                                                cliStatus = "0";
+                                                statusString = "desactivado";
+                                            }
+                                            else{
+                                                cliStatus = "1";
+                                                statusString = "activado";
+                                            }
                                             break;
                                         }  
                                         
                                     };
+                                    
+                                    if(pendingAmount(filterMovements()) > 0){
+                                    
+                                        modalAlertHandling(`El cliente '${cliName}' tiene cuentas pendientes`);
+                                        return;
 
+                                    }
                                     //Replace client name given that the ID matches
-                                    delConfirmation(`'${cliName}'`, ()=>{}, () => {
+                                    delConfirmation(`'${cliName}'`, statusString,()=>{}, () => {
                                         for (let i = 0; i < clients.length; i++) {
 
                                             if(Number(clients[i].id) === Number(updateId)){
-                                                clients.splice(i, 1);
+                                                //clients.splice(i, 1);
+                                                    clients[i].status = cliStatus;
                                                 break;
                                             }  
                                             
@@ -247,17 +326,17 @@ const Registration = () => {
                                         setUpdateId("");
                                         setCreate(true);
                                         setRunEffect(!runEffect);
-                                        modalAlertHandling("Cliente eliminado")
+                                        modalAlertHandling("Cliente "+statusString)
                                     })
                                     
                                 }else{
-                                    modalAlertHandling("Algo salió mal")
+                                    modalAlertHandling("Algo salió muy mal!")
                                 }
 
                             }}
                         >
                         
-                            <AText textContent={"Eliminar"} />                 
+                            <AText textContent={"Cambiar estado"} />                 
                         
                         </TouchableOpacity>
                         <TouchableOpacity style={[styles.formButton, {backgroundColor: "#f0ad4eae", width: "30%"}]} 
@@ -288,25 +367,91 @@ const Registration = () => {
                     
                     {/*Filter*/}
                     <AText textContent={"Buscar"}/> 
+                    
+
                     <TextInput
                         style={styles.input}
                         placeholder="Nombre"
                         onChangeText={(input) => {
-                                
                                 setFilterInput(input);
-
                         }}
                         value={filterInput}
                     /> 
 
+                    <View style={{flexDirection:"column"}}>
+                        <View style={[styles.rowForm, ]}>
+                            <View>
+                                <RadioButton.Item
+                                    value="todos"
+                                    label="Todos"
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    status={ typeFilter === 'todos' ? 'checked' : 'unchecked' }
+                                    onPress={() => {
+                                        clearClientSelection();
+                                        setTypeFilter('todos');
+                                    }}
+                                />
+                            </View>
+                            <View >
+                                <RadioButton.Item
+                                    value="activos"
+                                    label="Activos"
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    status={ typeFilter === 'activos' ? 'checked' : 'unchecked' }
+                                    onPress={() =>  {
+                                        clearClientSelection();
+                                        setTypeFilter('activos');
+                                    }}
+                                />
+                            </View>
+                            <View >
+                                <RadioButton.Item
+                                    value="inactivos"
+                                    label="Inactivos"
+                                    uncheckedColor={"white"}
+                                    color={"#3056d3"}
+                                    labelStyle={{color: "white", fontSize: 14}}
+                                    status={ typeFilter === 'inactivos' ? 'checked' : 'unchecked' }
+                                    onPress={() => {
+                                        clearClientSelection();
+                                        setTypeFilter('inactivos');
+                                    }}
+                                />
+                            </View>
+                        </View>
+                    </View>
                     {Table(tHeaders, 
                         () => {
-
-                            if(clients.length < 1) return;  
-
-                             return clients.map(data=>{
+                            let returned = false;
+                            if(filterClients().length < 1){
+                                return <View >
+                                    
+                                            <TouchableOpacity 
+                                                style={{
+                                                        flexDirection: "row",
+                                                        alignSelf: 'stretch', 
+                                                        borderBottomWidth: 1,
+                                                        borderColor: "thistle",
+                                                    }} 
+                                            >
+                    
+                                                {genCell("No", tHeaders.length, "#3056d3")}
+                                                {genCell("hay", tHeaders.length, "#3056d3")}
+                                                {genCell("resultados", tHeaders.length, "#3056d3")}
+                                                
+                                            </TouchableOpacity>
+                    
+                                        </View>  
+                                }
+ 
+                             const fc = filterClients().map(data=>{
 
                                 if(data.name.toString().toLowerCase().indexOf(filterInput.toLowerCase()) > -1){
+                                    returned = true;
                                     return <View key={data.id}>
                                     
                                             <TouchableOpacity 
@@ -331,13 +476,39 @@ const Registration = () => {
                     
                                                 {genCell(data.name, tHeaders.length)}
                                                 {genCell(data.createdAt, tHeaders.length)}
-                    
+                                                {genCell(cStatus(data.status), tHeaders.length,  data.status == 0 ? "#d9534fce" : "#5cb85cce")}
+                                                
                                             </TouchableOpacity>
                     
                                         </View>  
-                                }
-
+                                } 
+                                    
+                                   
                             });
+ 
+                            if(!returned){
+                                return <View >
+                                    
+                                            <TouchableOpacity 
+                                                style={{
+                                                        flexDirection: "row",
+                                                        alignSelf: 'stretch', 
+                                                        borderBottomWidth: 1,
+                                                        borderColor: "thistle",
+                                                    }} 
+                                            >
+                    
+                                                {genCell("No", tHeaders.length, "#3056d3")}
+                                                {genCell("hay", tHeaders.length, "#3056d3")}
+                                                {genCell("resultados", tHeaders.length, "#3056d3")}
+                                                
+                                            </TouchableOpacity>
+                    
+                                        </View>  
+                            }else{
+                                return fc;
+                            }
+                           
 
                         } 
                     )}
@@ -398,7 +569,11 @@ const styles = StyleSheet.create({
     selectedCell: {
         backgroundColor: "#3056d3ce"
     },
-
+    rowForm: {
+        flexDirection: "row",
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
   
 
 });
