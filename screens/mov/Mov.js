@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Dimensions, ScrollView, Keyboard, Animated, TextInput, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
+import {View, StyleSheet, Dimensions, ScrollView, Keyboard, Animated, TextInput, TouchableOpacity, TouchableWithoutFeedback } from "react-native";
 import Icon from 'react-native-vector-icons/FontAwesome'
+import IconIo from 'react-native-vector-icons/Ionicons'
 import IconF5 from 'react-native-vector-icons/FontAwesome5'
 import Modal from "react-native-modal";
 
@@ -12,6 +13,8 @@ import {Table, genCell} from "../../components/util/table";
  
 import {writeFile, readFile} from "../../components/util/fileManager";
 
+const fs = require("react-native-fs"); 
+ 
 import { RadioButton } from 'react-native-paper';
 //phone dimensions
 const dime = Dimensions.get("screen");
@@ -37,8 +40,7 @@ const getMax = (arr, prop) => {
 }
 
 const Movements = () => {
-
- 
+    
     const opacity = useState(new Animated.Value(0))[0];
     let finished = true;
     function fadeIn(){
@@ -232,10 +234,7 @@ const Movements = () => {
 
 
     const [runEffect, setRunEffect] = useState(false);
-        
-
-
-
+         
     const [filterInput, setFilterInput] = useState("");
     const cHeaders = ["Nombre", "Fecha de creación"] 
     const [clients, setClients] = useState([]);
@@ -273,7 +272,6 @@ const Movements = () => {
             // make sure to catch any error
             .catch(console.error);;
 
-            console.log("Called")
 
 
         }, [runEffect]);
@@ -291,7 +289,30 @@ const Movements = () => {
             <ScrollView nestedScrollEnabled = {true} contentContainerStyle={styles.body}> 
                 {/*Client selector*/}
                 <View style={styles.formContainer}>
-                <AText textContent={"Cliente MAYBE ADD AN ICON TO CLEAR SELECTED CLIENT"}/> 
+
+                    <View style={{}}>
+                        <AText textContent={"Cliente"}/> 
+                        <TouchableOpacity  style={[ !isClientSelected ? styles.hidden : null,{marginLeft: 10, position:"absolute", alignSelf: "flex-end"}]}  onPress={()=>{
+                            //Default filters
+                            setIniDate("- / - / -");
+                            setEndDate("- / - / -");
+                            setTypeFilter("todos");
+                            
+                            setSelectedClient({name: "Cliente"});
+                            setIsGetClient(false);
+                            setIsNewLoan(false);
+                            setIsPayLoan(false);
+                            setIsClientSelected(false);  
+
+                            modalAlertHandling("Selección de cliente restablecida")
+                            
+                        }}>
+                            <IconIo
+                            name={'person-remove'}  size={20} color={"white"} 
+                            /> 
+                        </TouchableOpacity>
+                    </View>
+
                     <TouchableOpacity onPress={() => {openGetClient()}}>
                         <TextInput
                             style={[styles.input, isClientSelected ? styles.selectedInput : null]}
@@ -301,7 +322,6 @@ const Movements = () => {
                             color={"black"}
                         />
                         <Icon style={styles.innerIcon} name={'search'} size={20} color={"black"}/> 
-                         
                     </TouchableOpacity>
 
                 </View>
@@ -559,6 +579,9 @@ const Movements = () => {
                         <AText textContent={"Total en transacciones: " + (paidAmount(filterMovements()) + pendingAmount(filterMovements()))} 
                         color={"#f0ad4eae"} weight={"bold"} size={16}
                         />
+                        
+
+                   
 
                 </View>
 
@@ -956,6 +979,7 @@ const styles = StyleSheet.create({
         marginLeft: 5,
         marginRight: 5,
         marginTop: 10,
+        marginBottom: 10,
     },
     formButton: {
         alignItems: 'center',

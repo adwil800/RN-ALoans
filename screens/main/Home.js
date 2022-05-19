@@ -14,7 +14,7 @@ const Home = ({navigation}) => {
 
             <ScrollView contentContainerStyle={styles.body}> 
 
-                <View style={styles.section}>
+                <View style={{flexGrow: 1, flexDirection: "column", justifyContent: "space-around"}}>
 
                     <TouchableOpacity style={styles.sectionMenu} onPress={()=>{navigation.push('Register');}} >
    
@@ -45,18 +45,7 @@ const Home = ({navigation}) => {
 
 
 
-                     <TouchableOpacity style={styles.sectionMenu} onPress={()=>{navigation.push('Reports');}}>
-                        <View  style={{flexDirection: "row"}}>
-                            
-                            <Text style={styles.sectionText}>{"Reportes"}</Text>
-                            <Image
-                                style={styles.sectionImage}
-                                source={require('../../assets/images/rep.png')}
-                            />
-                        </View>                   
-                     </TouchableOpacity>
-
-
+                     
 
                 </View>
                 {/*Section*/}
@@ -78,19 +67,17 @@ const styles = StyleSheet.create({
         backgroundColor: "#1e1e1e",
         flexGrow: 1
     },
-    section:{
-        padding: 10,
-
-    },
     sectionMenu:{
-        height: dime.height/4,
+        flex: 1,
         backgroundColor: "#3056d3",
-        width: "100%",
         borderRadius: 10,
         padding: 5,
         alignItems: "center",
         justifyContent: "center",
-        marginTop: 15
+        marginLeft: 15,
+        marginRight: 15,
+        marginTop: 25,
+        marginBottom: 25
     },
 
 

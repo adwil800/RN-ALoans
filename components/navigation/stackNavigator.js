@@ -9,7 +9,6 @@ import Home from "../../screens/main/Home";
 
 import Register from "../../screens/register/Register";
 import Movements from "../../screens/mov/Mov";
-import Reports from "../../screens/report/Report";
 
 const Stack = createNativeStackNavigator(); 
 
@@ -19,13 +18,6 @@ const MainStackNavigator = () => {
 
         initialRouteName="Home"
       >
-
-        {/*<Stack.Screen name="Login" component={Login}
-          options={{
-            headerShown: false,
-
-          }}
-        />  */} 
 
         <Stack.Screen
           name="Home"
@@ -37,7 +29,6 @@ const MainStackNavigator = () => {
           }}
         />  
 
-        
         <Stack.Screen
           name="Register"
           component={Register} 
@@ -58,15 +49,6 @@ const MainStackNavigator = () => {
           }}
         />  
         
-        <Stack.Screen
-          name="Reports"
-          component={Reports} 
-          options={{
-            //headerShown: false,
-            header: ({navigation})=> <Navbar navigation={navigation} navTitle={"Reportes"} main={false}/>,
-
-          }}
-        />  
       </Stack.Navigator>
   );
 }

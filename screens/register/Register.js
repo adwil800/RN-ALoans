@@ -441,7 +441,7 @@ const Registration = () => {
                     
                                                 {genCell("No", tHeaders.length, "#3056d3")}
                                                 {genCell("hay", tHeaders.length, "#3056d3")}
-                                                {genCell("resultados", tHeaders.length, "#3056d3")}
+                                                {genCell("clientes", tHeaders.length, "#3056d3")}
                                                 
                                             </TouchableOpacity>
                     
@@ -552,7 +552,8 @@ const styles = StyleSheet.create({
         paddingRight: 5,
         marginLeft: 5,
         marginRight: 5,
-        marginTop: 15,
+        marginTop: 10,
+        marginBottom: 10,
     },
     formButton: {
         alignItems: 'center',

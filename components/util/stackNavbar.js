@@ -7,8 +7,6 @@ const dime = Dimensions.get("screen");
 
 const propTypes ={
     main: PropTypes.bool,
-
-
 }  
 
 const defaultProps ={
@@ -31,7 +29,10 @@ class Navbar extends React.PureComponent {
                     <View style={styles.mainNav}>
                     
                         <Text style={styles.navTitle}>{navTitle}</Text>
-
+                        <Image
+                                style={styles.logo}
+                                source={require('../../assets/images/rep.png')}
+                        />
                     </View> 
                 
                 )
@@ -45,7 +46,7 @@ class Navbar extends React.PureComponent {
                         <View style={styles.mainNav}>
                         
                             <TouchableOpacity style={[styles.icon, styles.backNav]} onPress={()=>{navigation.goBack()}}> 
-                                <Icon name={'chevron-left'} size={20} color={"white"}/> 
+                                <Icon name={'chevron-left'} size={25} color={"white"}/> 
                             </TouchableOpacity>
 
                             <Text style={styles.navTitle}>{navTitle}</Text>
@@ -71,7 +72,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "#3056d3",
-        height: dime.height*0.05,
+        height: dime.height*0.08,
         zIndex: 10,
     },
     logout:{
@@ -96,14 +97,17 @@ const styles = StyleSheet.create({
 
 
     icon:{
-        
         width: dime.width/8,
         alignItems: "center",
         flexDirection: "row",
         justifyContent:"center",
     
+    },
+    logo:{
+        marginLeft: 10,
+        height: 40,
+        width: 40,
     }
-
 
 
 });
